@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#176b57">
+  <meta name="description" content="行きたい場所を保存して、訪問記録をつける自分専用アプリ">
+  <title>My Places</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div><div class="eyebrow">YOUR PERSONAL TRAVEL LIST</div><h1>📍 My Places</h1><p>いつか行きたい場所を、忘れないように。</p></div>
+    <button id="installBtn" class="install hidden">ホーム画面に追加</button>
+  </header>
+
+  <main>
+    <section class="stats">
+      <article><strong id="totalCount">0</strong><span>登録した場所</span></article>
+      <article><strong id="todoCount">0</strong><span>行きたい</span></article>
+      <article><strong id="doneCount">0</strong><span>行った</span></article>
+    </section>
+
+    <section class="panel">
+      <h2>＋ 場所を追加</h2>
+      <form id="placeForm">
+        <label for="placeName">場所の名前</label>
+        <div class="searchline">
+          <input id="placeName" required maxlength="100" placeholder="例：清水寺、直島、〇〇カフェ">
+          <button type="button" id="lookupBtn" class="secondary">場所を検索</button>
+        </div>
+        <div id="lookupStatus" class="hint">名前を入力して「場所を検索」を押すと、地図上の位置を探します。</div>
+        <label for="category">カテゴリー</label>
+        <select id="category">
+          <option>観光</option><option>グルメ</option><option>カフェ</option><option>宿泊</option>
+          <option>買い物</option><option>自然・レジャー</option><option>その他</option>
+        </select>
+        <label for="memo">メモ（任意）</label>
+        <textarea id="memo" rows="2" maxlength="500" placeholder="行きたい理由、営業時間、誰と行くかなど"></textarea>
+        <input type="hidden" id="lat"><input type="hidden" id="lon"><input type="hidden" id="address">
+        <button class="primary full" type="submit">この場所を保存</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="sectionhead"><h2>場所リスト</h2><button id="exportBtn" class="textbtn">バックアップを書き出す</button></div>
+      <div class="filters">
+        <button data-filter="all" class="chip active">すべて</button>
+        <button data-filter="todo" class="chip">行きたい</button>
+        <button data-filter="done" class="chip">行った</button>
+      </div>
+      <input id="filterSearch" class="filtersearch" placeholder="登録した場所を検索">
+      <div id="placesList" class="places"></div>
+      <div id="empty" class="empty">まだ場所がありません。気になる場所を登録してみよう！</div>
+    </section>
+
+    <section class="panel">
+      <div class="sectionhead"><h2>地図</h2><span class="hint">位置情報がある場所を表示</span></div>
+      <div id="map"></div>
+      <div class="mapnote">地図データ © OpenStreetMap contributors</div>
+    </section>
+
+    <section class="panel backup">
+      <h2>データの復元</h2>
+      <p>機種変更やブラウザのデータ削除に備えて、定期的にバックアップを書き出してください。</p>
+      <label class="secondary filelabel">バックアップを読み込む<input id="importFile" type="file" accept="application/json"></label>
+    </section>
+    <footer>My Places · データはこの端末のブラウザ内に保存されます。</footer>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
