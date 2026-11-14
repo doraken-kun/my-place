@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#ffffff">
+  <title>Google Maps + Compass</title>
+  <style>
+    :root { --gm-blue:#1a73e8; --gm-shadow:0 1px 4px rgba(0,0,0,.28); }
+    * { box-sizing:border-box; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; font-family:Roboto,Arial,sans-serif; background:#e8eaed; }
+    #map { position:absolute; inset:0; }
+    .top-search {
+      position:absolute; z-index:5; top:12px; left:12px; right:12px; height:54px;
+      display:flex; align-items:center; gap:15px; padding:0 16px; border-radius:28px;
+      background:#fff; box-shadow:var(--gm-shadow); color:#5f6368;
+    }
+    .hamburger { width:20px; height:16px; position:relative; border-top:2px solid #5f6368; border-bottom:2px solid #5f6368; flex:none; }
+    .hamburger:after { content:""; position:absolute; left:0; right:0; top:5px; border-top:2px solid #5f6368; }
+    .search-label { font-size:16px; flex:1; min-width:0; border:0; outline:0; background:transparent; color:#202124; }
+    .search-label::placeholder { color:#5f6368; opacity:1; }
+    .avatar { width:32px; height:32px; border-radius:50%; background:#4285f4; color:#fff; display:grid; place-items:center; font-size:15px; font-weight:600; }
+    .map-controls { position:absolute; z-index:5; right:12px; bottom:110px; display:flex; flex-direction:column; gap:12px; }
+    .round {
+      width:46px; height:46px; border:0; border-radius:50%; background:#fff; box-shadow:var(--gm-shadow);
+      display:grid; place-items:center; color:#5f6368; cursor:pointer; padding:0;
+    }
+    .round svg { width:23px; height:23px; }
+    .compass {
+      position:absolute; z-index:6; top:80px; right:14px; width:52px; height:52px; border-radius:50%;
+      background:rgba(255,255,255,.97); box-shadow:var(--gm-shadow); display:grid; place-items:center;
+      border:1px solid rgba(0,0,0,.05); touch-action:manipulation; cursor:pointer;
+    }
+    .compass svg { width:36px; height:36px; overflow:visible; }
+    #needle { transform-origin:18px 18px; }
+    .compass-note {
+      position:absolute; z-index:6; top:136px; right:12px; background:rgba(255,255,255,.94);
+      border-radius:10px; padding:5px 8px; font-size:10px; color:#5f6368; box-shadow:var(--gm-shadow);
+      max-width:150px; text-align:center;
+    }
+    .bottom-sheet {
+      position:absolute; z-index:5; bottom:0; left:0; right:0; height:78px; background:#fff;
+      border-radius:16px 16px 0 0; box-shadow:0 -1px 5px rgba(0,0,0,.12);
+      display:flex; justify-content:space-around; align-items:center; padding-bottom:env(safe-area-inset-bottom);
+    }
+    .nav-item { border:0; background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#5f6368; font-size:11px; min-width:60px; padding:6px 8px; cursor:pointer; }
+    .nav-item.active { color:#1a73e8; font-weight:600; }
+    .nav-icon { width:23px; height:23px; display:grid; place-items:center; font-size:20px; }
+    .status {
+      position:absolute; z-index:7; left:12px; bottom:94px; max-width:calc(100% - 90px);
+      background:rgba(255,255,255,.95); color:#5f6368; font-size:12px; padding:8px 11px;
+      border-radius:10px; box-shadow:var(--gm-shadow); line-height:1.35;
+    }
+    .notice {
+      position:absolute; z-index:10; left:12px; right:12px; top:145px; padding:12px 14px;
+      border-radius:12px; background:#fff; box-shadow:var(--gm-shadow); color:#3c4043; font-size:13px; line-height:1.5;
+    }
+    .notice strong { display:block; margin-bottom:4px; }
+    .notice button { border:0; background:var(--gm-blue); color:white; border-radius:18px; padding:8px 14px; margin-top:8px; }
+    @media (min-width:700px) {
+      .top-search { max-width:420px; right:auto; }
+      .compass { top:84px; right:22px; }
+      .compass-note { right:20px; }
+      .map-controls { right:20px; }
+      .bottom-sheet { left:50%; right:auto; width:420px; transform:translateX(-50%); border-radius:16px 16px 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Google map"></div>
+
+  <div class="top-search">
+    <div class="hamburger" aria-hidden="true"></div>
+    <input id="searchInput" class="search-label" type="search" placeholder="ここで検索" aria-label="場所を検索" autocomplete="off">
+    <div class="avatar">G</div>
+  </div>
+
+  <button class="compass" id="compassButton" aria-label="コンパス。タップして地図を北向きに戻す" title="タップして北向きに戻す">
+    <svg viewBox="0 0 36 36" aria-hidden="true">
+      <text x="18" y="7" text-anchor="middle" font-size="7" font-weight="700" fill="#5f6368">N</text>
+      <g id="needle">
+        <path d="M18 9 L12.8 20.5 L18 18.2 Z" fill="#ea4335"/>
+        <path d="M18 9 L23.2 20.5 L18 18.2 Z" fill="#9aa0a6"/>
+        <circle cx="18" cy="18.2" r="2.2" fill="#5f6368"/>
+      </g>
+    </svg>
+  </button>
+  <div class="compass-note" id="compassNote">方位を取得しています</div>
+
+  <div class="map-controls">
+    <button class="round" id="locateButton" aria-label="現在地"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg></button>
+    <button class="round" id="zoomIn" aria-label="拡大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="round" id="zoomOut" aria-label="縮小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+  </div>
+
+  <div class="status" id="status">地図を読み込んでいます…</div>
+
+  <div class="bottom-sheet">
+    <button class="nav-item active" data-action="map"><div class="nav-icon">⌖</div><div>地図</div></button>
+    <button class="nav-item" data-action="save"><div class="nav-icon">♡</div><div>現在地を保存</div></button>
+    <button class="nav-item" data-action="saved"><div class="nav-icon">▣</div><div>保存済み</div></button>
+    <button class="nav-item" data-action="nearby"><div class="nav-icon">⌕</div><div>周辺検索</div></button>
+  </div>
+
+  <div class="notice" id="setupNotice" hidden>
+    <strong>Googleマップを表示する準備が必要です</strong>
+    この試作版ではGoogle Maps JavaScript APIキーが必要です。HTML内の <code>YOUR_GOOGLE_MAPS_API_KEY</code> を自分のAPIキーに置き換えてください。
+    <br><button id="dismissNotice">閉じる</button>
+  </div>
+
+<script>
+  // APIキーは画面から入力できます。ソースコードを編集する必要はありません。
+  const KEY_STORAGE = "compass_maps_api_key";
+
+  let map;
+  let currentHeading = 0;
+  let targetHeading = 0;
+  let headingAvailable = false;
+  let lastUpdate = 0;
+  let locationMarker = null;
+  let rafId = null;
+
+  const needle = document.getElementById("needle");
+  const note = document.getElementById("compassNote");
+  const statusEl = document.getElementById("status");
+
+  function normalize(deg) { return ((deg % 360) + 360) % 360; }
+  function shortestDelta(from, to) { return ((to - from + 540) % 360) - 180; }
+
+  // 角度の境界（359°→0°）でも逆回転しないよう、最短方向へ滑らかに追従。
+  function animateCompass(now) {
+    const delta = shortestDelta(currentHeading, targetHeading);
+    const dt = lastUpdate ? Math.min((now - lastUpdate) / 1000, 0.05) : 0.016;
+    lastUpdate = now;
+    const smoothing = 1 - Math.exp(-dt / 0.11);
+    currentHeading = normalize(currentHeading + delta * smoothing);
+    needle.setAttribute("transform", `rotate(${currentHeading} 18 18)`);
+    rafId = requestAnimationFrame(animateCompass);
+  }
+  rafId = requestAnimationFrame(animateCompass);
+
+  function setHeading(deg) {
+    if (!Number.isFinite(deg)) return;
+    targetHeading = normalize(deg);
+    headingAvailable = true;
+    note.textContent = `${Math.round(targetHeading)}°`;
+  }
+
+  function handleOrientation(event) {
+    // iOS Safari等はwebkitCompassHeadingが磁北基準で提供される。
+    if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
+      setHeading(event.webkitCompassHeading);
+      return;
+    }
+    // Android Chrome: absolute orientationのalphaを方位角へ変換。
+    if (event.absolute === true && typeof event.alpha === "number") {
+      const screenAngle = (screen.orientation && typeof screen.orientation.angle === "number")
+        ? screen.orientation.angle : (window.orientation || 0);
+      setHeading(360 - event.alpha + screenAngle);
+    }
+  }
+
+  function startCompass() {
+    if (!("DeviceOrientationEvent" in window)) {
+      note.textContent = "方位センサー非対応";
+      return;
+    }
+    window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+    window.addEventListener("deviceorientation", handleOrientation, true);
+    note.textContent = "スマホを水平にして方位を確認";
+  }
+
+  function initMap() {
+    if (!window.google || !google.maps) {
+      document.getElementById("setupNotice").hidden = false;
+      statusEl.textContent = "GoogleマップのAPIキーを設定してください";
+      return;
+    }
+    map = new google.maps.Map(document.getElementById("map"), {
+      center: { lat: 34.7303, lng: 135.4983 },
+      zoom: 15,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      clickableIcons: true,
+      gestureHandling: "greedy",
+      rotateControl: false,
+      heading: 0,
+      tilt: 0
+    });
+
+    statusEl.textContent = "現在地を取得しています…";
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(pos => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (!locationMarker) {
+          locationMarker = new google.maps.Marker({
+            position: p, map, title: "現在地",
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 8, fillColor: "#4285F4", fillOpacity: 1,
+              strokeColor: "#ffffff", strokeWeight: 3
+            }
+          });
+          map.setCenter(p);
+        } else {
+          locationMarker.setPosition(p);
+        }
+        statusEl.textContent = "現在地を表示中";
+      }, () => {
+        statusEl.textContent = "位置情報を取得できません。ブラウザの位置情報を許可してください。";
+      }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 });
+    } else {
+      statusEl.textContent = "このブラウザでは位置情報を利用できません";
+    }
+
+    document.getElementById("locateButton").addEventListener("click", () => {
+      if (locationMarker) map.panTo(locationMarker.getPosition());
+      else if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
+        map.panTo({lat:pos.coords.latitude,lng:pos.coords.longitude});
+      });
+    });
+    document.getElementById("zoomIn").addEventListener("click", () => map.setZoom(map.getZoom() + 1));
+    document.getElementById("zoomOut").addEventListener("click", () => map.setZoom(map.getZoom() - 1));
+
+    const searchInput = document.getElementById("searchInput");
+    searchInput.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      const query = searchInput.value.trim();
+      if (!query) return;
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: query, region: "JP" }, (results, status) => {
+        if (status === "OK" && results && results[0]) {
+          map.setCenter(results[0].geometry.location);
+          map.setZoom(16);
+          statusEl.textContent = results[0].formatted_address;
+          searchInput.blur();
+        } else {
+          statusEl.textContent = "場所が見つかりませんでした。検索語を変えてください。";
+        }
+      });
+    });
+
+    const savedKey = "compass_saved_places";
+    function readSaved() {
+      try { return JSON.parse(localStorage.getItem(savedKey) || "[]"); } catch (_) { return []; }
+    }
+    function writeSaved(items) {
+      try { localStorage.setItem(savedKey, JSON.stringify(items)); } catch (_) {}
+    }
+    document.querySelectorAll(".nav-item[data-action]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".nav-item[data-action]").forEach(item => item.classList.remove("active"));
+        button.classList.add("active");
+        const action = button.dataset.action;
+        if (action === "map") {
+          statusEl.textContent = "地図を表示中";
+          if (locationMarker) map.panTo(locationMarker.getPosition());
+        } else if (action === "save") {
+          const center = map.getCenter();
+          if (!center) return;
+          const items = readSaved();
+          items.push({ lat: center.lat(), lng: center.lng(), name: searchInput.value.trim() || "保存した場所", savedAt: new Date().toISOString() });
+          writeSaved(items);
+          statusEl.textContent = "この場所を保存しました";
+        } else if (action === "saved") {
+          const items = readSaved();
+          if (!items.length) {
+            statusEl.textContent = "保存した場所はまだありません。「現在地を保存」で登録できます。";
+          } else {
+            const latest = items[items.length - 1];
+            map.panTo({ lat: latest.lat, lng: latest.lng });
+            map.setZoom(16);
+            statusEl.textContent = `${items.length}件保存済み：${latest.name}`;
+          }
+        } else if (action === "nearby") {
+          searchInput.focus();
+          searchInput.placeholder = "周辺の場所を入力して検索";
+          statusEl.textContent = "検索欄に店名や施設名を入力してEnterを押してください";
+        }
+      });
+    });
+  }
+
+  document.getElementById("compassButton").addEventListener("click", () => {
+    // 地図を北向きに戻す。方位針はスマホの向きを引き続き表示。
+    if (map) map.setHeading(0);
+    note.textContent = headingAvailable ? `${Math.round(targetHeading)}°` : "方位を取得できません";
+  });
+  document.getElementById("dismissNotice").addEventListener("click", () => {
+    document.getElementById("setupNotice").hidden = true;
+  });
+
+  // iOS等で必要なセンサー許可。Android Chromeでは通常そのまま開始できる。
+  async function requestSensorPermission() {
+    if (typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+      try {
+        const result = await DeviceOrientationEvent.requestPermission();
+        if (result === "granted") startCompass();
+        else note.textContent = "センサーの利用が許可されていません";
+      } catch (_) { note.textContent = "センサーを開始できません"; }
+    } else {
+      startCompass();
+    }
+  }
+  document.getElementById("compassButton").addEventListener("contextmenu", e => e.preventDefault());
+  requestSensorPermission();
+
+  const setupNotice = document.getElementById("setupNotice");
+  setupNotice.innerHTML = `
+    <strong>Google Maps APIキーを設定</strong>
+    <div style="margin:6px 0 8px">Google Cloudで作成したMaps JavaScript API用のキーを入力してください。キーはこのブラウザ内に保存します。</div>
+    <input id="apiKeyInput" type="password" autocomplete="off" placeholder="AIza..." style="width:100%;padding:11px;border:1px solid #dadce0;border-radius:8px;font-size:14px">
+    <label style="display:flex;gap:8px;align-items:center;margin-top:9px;font-size:12px"><input id="showKey" type="checkbox">キーを表示</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="saveKey">地図を表示</button>
+      <button id="clearKey" style="background:#5f6368">保存キーを削除</button>
+    </div>
+    <div style="font-size:11px;color:#5f6368;margin-top:7px">※APIキーはMaps JavaScript APIに対応したものが必要です。公開前にHTTPリファラー制限とAPI制限を設定してください。</div>
+  `;
+  setupNotice.hidden = false;
+  statusEl.textContent = "Google Maps APIキーの設定待ち";
+
+  const keyInput = document.getElementById("apiKeyInput");
+  try { keyInput.value = localStorage.getItem(KEY_STORAGE) || ""; } catch (_) {}
+  document.getElementById("showKey").addEventListener("change", e => {
+    keyInput.type = e.target.checked ? "text" : "password";
+  });
+  document.getElementById("clearKey").addEventListener("click", () => {
+    try { localStorage.removeItem(KEY_STORAGE); } catch (_) {}
+    keyInput.value = "";
+    statusEl.textContent = "保存したAPIキーを削除しました";
+  });
+  document.getElementById("saveKey").addEventListener("click", () => {
+    const key = keyInput.value.trim();
+    if (!key) { statusEl.textContent = "APIキーを入力してください"; return; }
+    try { localStorage.setItem(KEY_STORAGE, key); } catch (_) {}
+    setupNotice.hidden = true;
+    statusEl.textContent = "Googleマップを読み込んでいます…";
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initMap&language=ja&region=JP`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      statusEl.textContent = "地図を読み込めません。Maps JavaScript APIの有効化、キー制限、請求先設定を確認してください。";
+      setupNotice.hidden = false;
+    };
+    window.initMap = initMap;
+    document.head.appendChild(script);
+  });
+</script>
+</body>
+</html>
